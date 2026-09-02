@@ -3,67 +3,85 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { healthRouter } from './routes/health';
+import { authRouter } from './routes/auth';
+import { adminRouter } from './routes/admin';
 
 export const app = express();
 
 // ─── 1. Seguridad de headers HTTP (Helmet) ───────────────────────────────────
 app.use(helmet());
 
-// ─── 2. CORS ─────────────────────────────────────────────────────────────────
+// ─── 2. CORS con soporte de cookies ──────────────────────────────────────────
 const allowedOrigins = [process.env.FRONTEND_URL ?? 'http://localhost:3000'];
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Permitir requests sin origin (ej: curl, Postman en dev)
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: Origen no permitido: ${origin}`));
       }
     },
-    credentials: true,
+    credentials: true, // Necesario para enviar/recibir cookies cross-origin
   })
 );
 
-// ─── 3. Rate Limiting global ──────────────────────────────────────────────────
+// ─── 3. Cookie Parser ─────────────────────────────────────────────────────────
+// Debe ir antes de los middlewares que leen req.cookies
+app.use(cookieParser());
+
+// ─── 4. Rate Limiting ─────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 300,                  // máx 300 requests por IP por ventana
+  windowMs: 15 * 60 * 1000,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes. Intente más tarde.' },
 });
 app.use('/api', globalLimiter);
 
-// ─── 4. Parsers ──────────────────────────────────────────────────────────────
+// Rate limiting estricto para el endpoint de login (contra fuerza bruta)
+// Se desactiva en entorno de test para no bloquear la suite de pruebas
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: process.env.NODE_ENV === 'test' ? 1000 : 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Espere 15 minutos.' },
+});
+app.use('/api/auth/login', loginLimiter);
+
+// ─── 5. Parsers ───────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-// ─── 5. Logger HTTP ──────────────────────────────────────────────────────────
+// ─── 6. Logger HTTP ───────────────────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('dev'));
 }
 
-// ─── 6. Rutas ────────────────────────────────────────────────────────────────
+// ─── 7. Rutas ─────────────────────────────────────────────────────────────────
 app.use('/api', healthRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 
-// ─── 7. Ruta raíz ────────────────────────────────────────────────────────────
+// ─── 8. Ruta raíz ─────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
   res.json({
     sistema: 'Sistema de Votación Institucional',
     version: '1.0.0',
-    fase: 'Fase 1 - Infraestructura',
-    docs: '/api/health',
+    fase: 'Fase 3 - Autenticación y Autorización',
   });
 });
 
-// ─── 8. Manejo de rutas no encontradas ───────────────────────────────────────
+// ─── 9. Ruta no encontrada ────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada.' });
 });
 
-// ─── 9. Manejador de errores global ──────────────────────────────────────────
+// ─── 10. Manejador de errores global ─────────────────────────────────────────
 app.use(
   (
     err: Error,

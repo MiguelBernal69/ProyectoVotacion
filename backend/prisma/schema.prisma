@@ -1,6 +1,5 @@
-// Este es el schema inicial (Fase 1).
-// En fases posteriores se añadirán: User, Role, Session, Poll,
-// NominalVote, SecretVote, SecretVoterRegistry, AuditLog, etc.
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
@@ -11,13 +10,188 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Fase 1: Solo una tabla de control de salud ────────────────────────────
-// Esta tabla será reemplazada en Fase 2. Su único propósito es
-// confirmar que Prisma se comunica correctamente con PostgreSQL.
-model HealthCheck {
-  id        Int      @id @default(autoincrement())
-  status    String   @default("ok")
-  checkedAt DateTime @default(now())
+// ─── ENUMS ──────────────────────────────────────────────────────────────────
 
-  @@map("health_checks")
+enum Role {
+  SUPERADMIN
+  ADMIN
+  PRESIDENT
+  AUDITOR
+  PARTICIPANT
+}
+
+enum SessionStatus {
+  PENDING
+  ACTIVE
+  CLOSED
+}
+
+enum PollType {
+  NOMINAL
+  SECRET
+}
+
+enum PollStatus {
+  PENDING
+  OPEN
+  CLOSED
+  CANCELED
+}
+
+// ─── MODELOS ────────────────────────────────────────────────────────────────
+
+model User {
+  id             String   @id @default(uuid())
+  identifier     String   @unique // DNI, Matrícula institucional, etc.
+  name           String
+  passwordHash   String
+  role           Role     @default(PARTICIPANT)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relaciones
+  sessions       SessionParticipant[]
+  nominalVotes   NominalVote[]
+  secretRegistry SecretVoterRegistry[]
+  auditLogs      AuditLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id          String        @id @default(uuid())
+  title       String
+  description String?
+  status      SessionStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Relaciones
+  participants SessionParticipant[]
+  polls        Poll[]
+
+  @@map("sessions")
+}
+
+// Relación N:M entre Usuario y Sesión (quién tiene derecho a participar)
+model SessionParticipant {
+  userId    String
+  sessionId String
+  isPresent Boolean  @default(false) // Para control de quórum opcional
+  joinedAt  DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, userId]) // UNIQUE implícito y Primary Key compuesta
+  @@map("session_participants")
+}
+
+model Poll {
+  id              String     @id @default(uuid())
+  sessionId       String
+  title           String
+  question        String
+  type            PollType
+  status          PollStatus @default(PENDING)
+  allowVoteChange Boolean    @default(false)
+  showResultsLive Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+  openedAt        DateTime?
+  closedAt        DateTime?
+
+  session         Session    @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+
+  // Opciones y Votos
+  options         PollOption[]
+  nominalVotes    NominalVote[]
+  secretRegistry  SecretVoterRegistry[]
+  secretVotes     SecretVote[]
+
+  @@map("polls")
+}
+
+model PollOption {
+  id        String   @id @default(uuid())
+  pollId    String
+  text      String   // A FAVOR, EN CONTRA, ABSTENCIÓN, u otro texto.
+
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  nominalVotes NominalVote[]
+  secretVotes  SecretVote[]
+
+  @@unique([pollId, text]) // No repetir la misma opción en una votación
+  @@map("poll_options")
+}
+
+// ─── VOTACIÓN NOMINAL ───────────────────────────────────────────────────────
+
+model NominalVote {
+  id        String   @id @default(uuid())
+  pollId    String
+  userId    String
+  optionId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt // Si allowVoteChange es true, se actualizará
+
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Restrict)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@unique([pollId, userId]) // Evita doble voto a nivel base de datos
+  @@map("nominal_votes")
+}
+
+// ─── VOTACIÓN SECRETA ───────────────────────────────────────────────────────
+// La separación física de estas dos tablas garantiza matemáticamente el anonimato.
+
+// 1. Registro de quién ya votó (sin saber qué opción eligió)
+model SecretVoterRegistry {
+  pollId        String
+  userId        String
+  hasVoted      Boolean  @default(true)
+  modifiedCount Int      @default(0) // Cuántas veces modificó el voto (si está permitido)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  poll Poll @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([pollId, userId]) // UNIQUE compuesto y Primary Key
+  @@map("secret_voter_registry")
+}
+
+// 2. Urna de votos secretos (sin saber a quién pertenece)
+model SecretVote {
+  id            String   @id @default(uuid())
+  pollId        String
+  optionId      String
+  voteTokenHash String   @unique // Hash del token aleatorio entregado al frontend
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt // Si allowVoteChange es true, usa el token para hacer update
+
+  poll   Poll       @relation(fields: [pollId], references: [id], onDelete: Restrict)
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  // NOTA: NO hay relación con User. La integridad del voto secreto es absoluta.
+
+  @@map("secret_votes")
+}
+
+// ─── AUDITORÍA ──────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  action       String   // Ej: POLL_OPENED, VOTE_CAST, SESSION_CREATED
+  userId       String?  // Quién causó el evento (puede ser nulo si es una acción del sistema)
+  details      Json     // Información extra y contexto
+  hash         String   // Hash = crypto.hash(action + details + timestamp + previousHash)
+  previousHash String   // Hash del evento anterior (encadenamiento criptográfico)
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("audit_logs")
 }
