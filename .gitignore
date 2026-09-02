@@ -1,0 +1,22 @@
+# Entorno
+.env
+*.env.local
+backend/.env
+frontend/.env.local
+
+# Node
+node_modules/
+dist/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Docker volumes
+postgres_data/
+
+# OS
+.DS_Store
+Thumbs.db

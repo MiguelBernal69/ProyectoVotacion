@@ -1,0 +1,23 @@
+// Este es el schema inicial (Fase 1).
+// En fases posteriores se añadirán: User, Role, Session, Poll,
+// NominalVote, SecretVote, SecretVoterRegistry, AuditLog, etc.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Fase 1: Solo una tabla de control de salud ────────────────────────────
+// Esta tabla será reemplazada en Fase 2. Su único propósito es
+// confirmar que Prisma se comunica correctamente con PostgreSQL.
+model HealthCheck {
+  id        Int      @id @default(autoincrement())
+  status    String   @default("ok")
+  checkedAt DateTime @default(now())
+
+  @@map("health_checks")
+}
