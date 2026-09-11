@@ -7,6 +7,12 @@ import cookieParser from 'cookie-parser';
 import { healthRouter } from './routes/health';
 import { authRouter } from './routes/auth';
 import { adminRouter } from './routes/admin';
+import { sessionsRouter } from './routes/sessions';
+import { usersRouter } from './routes/users';
+import { pollsRouter } from './routes/polls';
+import { votesRouter } from './routes/votes';
+import { auditRouter } from './routes/audit';
+import { resultsRouter } from './routes/results';
 
 export const app = express();
 
@@ -35,7 +41,7 @@ app.use(cookieParser());
 // ─── 4. Rate Limiting ─────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: process.env.NODE_ENV === 'test' ? 10000 : 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas solicitudes. Intente más tarde.' },
@@ -66,13 +72,19 @@ if (process.env.NODE_ENV !== 'test') {
 app.use('/api', healthRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api', pollsRouter);
+app.use('/api', votesRouter);
+app.use('/api', auditRouter);
+app.use('/api', resultsRouter);
 
 // ─── 8. Ruta raíz ─────────────────────────────────────────────────────────────
 app.get('/', (_req, res) => {
   res.json({
     sistema: 'Sistema de Votación Institucional',
     version: '1.0.0',
-    fase: 'Fase 3 - Autenticación y Autorización',
+    fase: 'Fase 5 - Configuración de Votaciones',
   });
 });
 
@@ -82,13 +94,25 @@ app.use((_req, res) => {
 });
 
 // ─── 10. Manejador de errores global ─────────────────────────────────────────
+
+// Body-parser lanza SyntaxError cuando el JSON está malformado.
+// Capturarlo aquí devuelve 400 en lugar de 500.
 app.use(
   (
-    err: Error,
+    err: Error & { status?: number; type?: string },
     _req: express.Request,
     res: express.Response,
     _next: express.NextFunction
   ) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+      res.status(400).json({ error: 'JSON malformado en el cuerpo de la solicitud.' });
+      return;
+    }
+    // Errores explícitos con status (e.g., express-rate-limit, etc.)
+    if (err.status && err.status >= 400 && err.status < 500) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     console.error('[ERROR]', err.message);
     res.status(500).json({ error: 'Error interno del servidor.' });
   }

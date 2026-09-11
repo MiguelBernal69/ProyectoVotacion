@@ -3,20 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
-    color-scheme: dark;
-  }
-
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  html {
-    scroll-behavior: smooth;
-  }
-
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
   body {
     background-color: #0f0f1a;
     color: #e2e8f0;
@@ -27,24 +16,76 @@
 }
 
 @layer components {
-  /* Tarjeta con glassmorphism sutil */
+  /* Glassmorphism card */
   .card-glass {
     @apply bg-surface-card border border-surface-border rounded-2xl backdrop-blur-sm;
   }
 
-  /* Badges de estado */
+  /* Input field */
+  .input-field {
+    @apply w-full px-4 py-2.5 rounded-xl bg-surface border border-surface-border
+           text-slate-100 placeholder-slate-600 text-sm
+           focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30
+           disabled:opacity-50 disabled:cursor-not-allowed
+           transition-colors duration-200;
+  }
+
+  /* Select uses same style as input */
+  select.input-field {
+    @apply appearance-none cursor-pointer;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply px-4 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 active:scale-[0.98]
+           disabled:opacity-50 disabled:cursor-not-allowed
+           text-white text-sm font-medium transition-all duration-200;
+  }
+
+  /* Secondary button */
+  .btn-secondary {
+    @apply px-4 py-2 rounded-xl border border-surface-border text-slate-400
+           hover:text-slate-200 hover:border-slate-500 active:scale-[0.98]
+           text-sm font-medium transition-all duration-200;
+  }
+
+  /* Icon-only button */
+  .btn-icon {
+    @apply p-2 rounded-xl border border-surface-border text-slate-500
+           hover:text-slate-200 hover:border-slate-500
+           text-sm transition-all duration-200;
+  }
+
+  /* Status badges */
   .badge-ok {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
            bg-emerald-500/10 text-emerald-400 border border-emerald-500/20;
   }
-
   .badge-error {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
            bg-red-500/10 text-red-400 border border-red-500/20;
   }
-
   .badge-loading {
     @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium
            bg-amber-500/10 text-amber-400 border border-amber-500/20;
   }
+}
+
+@layer utilities {
+  .animate-slide-up {
+    animation: slideUp 0.2s ease-out both;
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.15s ease-out both;
+  }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
