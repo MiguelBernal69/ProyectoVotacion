@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { io, Socket } from 'socket.io-client'
 import {
   CalendarDays, Users, ArrowLeft, Edit3, Trash2,
   Loader2, AlertCircle, CheckCircle2, ChevronDown, X, Plus, BarChart3, Settings
@@ -225,6 +226,27 @@ export default function SessionDetailPage() {
 
   useEffect(() => { load() }, [load])
 
+  // ─── Socket.IO en tiempo real ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return
+
+    const socket: Socket = io('/voting', {
+      path: '/socket.io',
+      withCredentials: true,
+    })
+
+    socket.on('connect', () => {
+      socket.emit('subscribe:session', id)
+    })
+
+    socket.on('poll:opened', () => load())
+    socket.on('poll:closed', () => load())
+    socket.on('poll:cancelled', () => load())
+    socket.on('session:updated', () => load())
+
+    return () => { socket.disconnect() }
+  }, [id, load])
+
   const flash = (type: 'error' | 'success', msg: string) => { setFeedback({ type, msg }); setTimeout(() => setFeedback(null), 4000) }
 
   const handleSaveEdit = async () => {
@@ -375,20 +397,23 @@ export default function SessionDetailPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {session.polls.map(poll => (
-                <Link key={poll.id} to={`/polls/${poll.id}`}
-                  className="block p-4 rounded-xl bg-surface border border-surface-border hover:border-primary-500/30 transition-colors">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-slate-200 leading-snug">{poll.title}</h3>
-                    <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${POLL_STATUS_STYLE[poll.status]}`}>
-                      {POLL_STATUS_LABEL[poll.status]}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-500 font-medium">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded-md">{poll.type === 'NOMINAL' ? 'NOMINAL' : 'SECRETA'}</span>
-                  </div>
-                </Link>
-              ))}
+              {session.polls.map(poll => {
+                const pollLink = user?.role === 'PARTICIPANT' ? `/vote/${poll.id}` : `/polls/${poll.id}`
+                return (
+                  <Link key={poll.id} to={pollLink}
+                    className="block p-4 rounded-xl bg-surface border border-surface-border hover:border-primary-500/30 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-slate-200 leading-snug">{poll.title}</h3>
+                      <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border ${POLL_STATUS_STYLE[poll.status]}`}>
+                        {POLL_STATUS_LABEL[poll.status]}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2 text-[11px] text-slate-500 font-medium">
+                      <span className="bg-slate-800 px-2 py-0.5 rounded-md">{poll.type === 'NOMINAL' ? 'NOMINAL' : 'SECRETA'}</span>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </div>

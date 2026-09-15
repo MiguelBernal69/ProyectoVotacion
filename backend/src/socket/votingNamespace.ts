@@ -47,10 +47,8 @@ export function registerVotingNamespace(io: Server): void {
     const { userId, role } = socket.data.user as AuthenticatedSocketData;
     console.log(`[Socket /voting] Conectado: userId=${userId} role=${role} socketId=${socket.id}`);
 
-    // ── subscribe:poll ──────────────────────────────────────────────────────
-    // El cliente solicita escuchar una votación específica.
-    // El servidor une al room y emite el estado actual (sync).
-    socket.on('subscribe:poll', async (pollId: string) => {
+    const handleSubscribePoll = async (payload: any) => {
+      const pollId = typeof payload === 'string' ? payload : payload?.pollId;
       if (typeof pollId !== 'string' || !pollId) return;
 
       try {
@@ -64,7 +62,7 @@ export function registerVotingNamespace(io: Server): void {
           return;
         }
 
-        // Verificar que el usuario pertenece a la sesión (o tiene rol de gestión)
+        // Verificar pertenencia o rol de gestión
         const isManager = ['SUPERADMIN', 'ADMIN', 'PRESIDENT', 'AUDITOR'].includes(role);
         if (!isManager) {
           const participant = await prisma.sessionParticipant.findUnique({
@@ -77,7 +75,8 @@ export function registerVotingNamespace(io: Server): void {
         }
 
         socket.join(`poll:${pollId}`);
-        console.log(`[Socket] ${userId} joined poll:${pollId}`);
+        socket.join(`session:${poll.sessionId}`);
+        console.log(`[Socket] ${userId} (${role}) joined poll:${pollId} & session:${poll.sessionId}`);
 
         // Emitir estado actual (sync)
         const [totalEligible, votedCount] = await Promise.all([
@@ -89,19 +88,16 @@ export function registerVotingNamespace(io: Server): void {
             : prisma.secretVoterRegistry.count({ where: { pollId } }),
         ]);
 
-        // Calcular resultados si aplica
-        let results = undefined;
-        if (poll.showResultsLive && poll.status === 'OPEN') {
-          results = await Promise.all(
-            poll.options.map(async (opt) => ({
-              optionId: opt.id,
-              text: opt.text,
-              count: poll.type === 'NOMINAL'
-                ? await prisma.nominalVote.count({ where: { pollId, optionId: opt.id } })
-                : await prisma.secretVote.count({ where: { pollId, optionId: opt.id } }),
-            }))
-          );
-        }
+        // Calcular resultados para todos los suscriptores
+        const results = await Promise.all(
+          poll.options.map(async (opt) => ({
+            optionId: opt.id,
+            text: opt.text,
+            count: poll.type === 'NOMINAL'
+              ? await prisma.nominalVote.count({ where: { pollId, optionId: opt.id } })
+              : await prisma.secretVote.count({ where: { pollId, optionId: opt.id } }),
+          }))
+        );
 
         socket.emit('poll:sync', {
           poll: {
@@ -125,7 +121,10 @@ export function registerVotingNamespace(io: Server): void {
         console.error('[Socket] Error en subscribe:poll', err);
         socket.emit('error', { message: 'Error al suscribirse a la votación.' });
       }
-    });
+    };
+
+    socket.on('subscribe:poll', handleSubscribePoll);
+    socket.on('join:poll', handleSubscribePoll);
 
     // ── subscribe:session ───────────────────────────────────────────────────
     socket.on('subscribe:session', async (sessionId: string) => {

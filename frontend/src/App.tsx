@@ -54,7 +54,7 @@ export default function App() {
             <Route
               path="/sessions"
               element={
-                <ProtectedRoute allowedRoles={['SUPERADMIN', 'ADMIN', 'PRESIDENT', 'AUDITOR']}>
+                <ProtectedRoute allowedRoles={['SUPERADMIN', 'ADMIN', 'PRESIDENT', 'AUDITOR', 'PARTICIPANT']}>
                   <AppLayout><SessionsPage /></AppLayout>
                 </ProtectedRoute>
               }
@@ -72,7 +72,7 @@ export default function App() {
             <Route
               path="/polls/:id"
               element={
-                <ProtectedRoute allowedRoles={['SUPERADMIN', 'ADMIN', 'PRESIDENT', 'AUDITOR']}>
+                <ProtectedRoute allowedRoles={['SUPERADMIN', 'ADMIN', 'PRESIDENT', 'AUDITOR', 'PARTICIPANT']}>
                   <AppLayout><PollPreviewPage /></AppLayout>
                 </ProtectedRoute>
               }

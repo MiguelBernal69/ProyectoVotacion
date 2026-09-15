@@ -12,7 +12,10 @@ export function initSocket(httpServer: HttpServer): Server {
 
   io = new Server(httpServer, {
     cors: {
-      origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+      origin: (origin, callback) => {
+        // En desarrollo o cuando se accede por IP local (LAN), permitir el origen
+        callback(null, true);
+      },
       credentials: true,
     },
     // Configuración de transporte y reconexión del lado del servidor

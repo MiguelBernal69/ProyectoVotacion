@@ -24,7 +24,8 @@ const allowedOrigins = [process.env.FRONTEND_URL ?? 'http://localhost:3000'];
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      // En desarrollo o cuando se accede por IP en red local (LAN), permitir cualquier origen
+      if (!origin || allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
         callback(null, true);
       } else {
         callback(new Error(`CORS: Origen no permitido: ${origin}`));

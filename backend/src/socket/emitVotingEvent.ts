@@ -121,37 +121,36 @@ export async function emitVoteCount(pollId: string): Promise<void> {
 
     const countPayload: VoteCountPayload = { pollId, votedCount, totalEligible };
     io.of('/voting').to(`poll:${pollId}`).emit('poll:vote_count', countPayload);
+    io.of('/voting').to(`session:${poll.sessionId}`).emit('poll:vote_count', countPayload);
 
-    // Si la votación muestra resultados en vivo, emitir también los parciales
-    if (poll.showResultsLive) {
-      let results: PollResultsPayload['results'] = [];
+    // Emitir siempre los resultados parciales en tiempo real para la sala de la votación y sesión
+    let results: PollResultsPayload['results'] = [];
 
-      if (poll.type === 'NOMINAL') {
-        results = await Promise.all(
-          poll.options.map(async (opt) => ({
-            optionId: opt.id,
-            text: opt.text,
-            count: await prisma.nominalVote.count({
-              where: { pollId, optionId: opt.id },
-            }),
-          }))
-        );
-      } else {
-        // Para votación secreta, los resultados parciales son por opción (sin revelar quién)
-        results = await Promise.all(
-          poll.options.map(async (opt) => ({
-            optionId: opt.id,
-            text: opt.text,
-            count: await prisma.secretVote.count({
-              where: { pollId, optionId: opt.id },
-            }),
-          }))
-        );
-      }
-
-      const resultsPayload: PollResultsPayload = { pollId, results };
-      io.of('/voting').to(`poll:${pollId}`).emit('poll:results', resultsPayload);
+    if (poll.type === 'NOMINAL') {
+      results = await Promise.all(
+        poll.options.map(async (opt) => ({
+          optionId: opt.id,
+          text: opt.text,
+          count: await prisma.nominalVote.count({
+            where: { pollId, optionId: opt.id },
+          }),
+        }))
+      );
+    } else {
+      results = await Promise.all(
+        poll.options.map(async (opt) => ({
+          optionId: opt.id,
+          text: opt.text,
+          count: await prisma.secretVote.count({
+            where: { pollId, optionId: opt.id },
+          }),
+        }))
+      );
     }
+
+    const resultsPayload: PollResultsPayload = { pollId, results };
+    io.of('/voting').to(`poll:${pollId}`).emit('poll:results', resultsPayload);
+    io.of('/voting').to(`session:${poll.sessionId}`).emit('poll:results', resultsPayload);
   } catch (err) {
     console.error('[Socket] Error emitiendo vote_count', err);
   }

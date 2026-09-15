@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { io, Socket } from 'socket.io-client'
 import {
   BarChart3, ArrowLeft, Edit3, Loader2, AlertCircle, CheckCircle2, ChevronDown, X,
-  Users, CheckSquare, ShieldQuestion, Trash2, Plus, FileText, Vote
+  Users, CheckSquare, ShieldQuestion, Trash2, Plus, FileText, Vote, Maximize2, Minimize2, Radio
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -19,6 +20,8 @@ interface Poll {
   options: PollOption[]
   session: { id: string; title: string; status: string }
 }
+
+interface VoteResultItem { optionId: string; text?: string; count: number }
 
 const STATUS_STYLE: Record<PollStatus, string> = {
   PENDING:   'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -47,9 +50,12 @@ export default function PollPreviewPage() {
 
   const [poll, setPoll] = useState<Poll | null>(null)
   const [eligibleCount, setEligibleCount] = useState(0)
+  const [votedCount, setVotedCount] = useState(0)
+  const [counts, setCounts] = useState<VoteResultItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<{ type: 'error'|'success'; msg: string } | null>(null)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // Edit State
   const [editing, setEditing] = useState(false)
@@ -70,7 +76,7 @@ export default function PollPreviewPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setPoll(data.poll)
-      setEligibleCount(data.eligibleCount)
+      setEligibleCount(data.eligibleCount ?? 0)
       setEditTitle(data.poll.title)
       setEditQuestion(data.poll.question)
       setEditType(data.poll.type)
@@ -82,6 +88,47 @@ export default function PollPreviewPage() {
   }, [id])
 
   useEffect(() => { load() }, [load])
+
+  // ─── WebSockets para actualización en tiempo real ───────────────────────────
+  useEffect(() => {
+    if (!id) return
+
+    const socket: Socket = io('/voting', {
+      path: '/socket.io',
+      withCredentials: true,
+    })
+
+    socket.on('connect', () => {
+      socket.emit('subscribe:poll', id)
+    })
+
+    socket.on('poll:sync', (data: any) => {
+      if (data.totalEligible !== undefined) setEligibleCount(data.totalEligible)
+      if (data.votedCount !== undefined) setVotedCount(data.votedCount)
+      if (data.results) setCounts(data.results)
+    })
+
+    socket.on('poll:vote_count', (data: { pollId: string; votedCount: number; totalEligible: number }) => {
+      if (data.pollId === id) {
+        setVotedCount(data.votedCount)
+        setEligibleCount(data.totalEligible)
+      }
+    })
+
+    socket.on('poll:results', (data: { pollId: string; results: VoteResultItem[] }) => {
+      if (data.pollId === id) {
+        setCounts(data.results)
+      }
+    })
+
+    socket.on('poll:closed', (data: { pollId: string }) => {
+      if (data.pollId === id) {
+        setPoll(p => p ? { ...p, status: 'CLOSED' } : p)
+      }
+    })
+
+    return () => { socket.disconnect() }
+  }, [id])
 
   const flash = (type: 'error' | 'success', msg: string) => { setFeedback({ type, msg }); setTimeout(() => setFeedback(null), 4000) }
 
@@ -150,12 +197,27 @@ export default function PollPreviewPage() {
   if (error || !poll) return <div className="p-6"><Alert type="error" msg={error ?? 'Votación no encontrada.'} /></div>
 
   const nextStatus = NEXT_STATUS[poll.status]
+  const totalFromResults = counts.reduce((acc, c) => acc + (c.count || 0), 0)
+  const totalVotesCast = Math.max(votedCount, totalFromResults)
+  const participationPct = eligibleCount > 0 ? Math.round((totalVotesCast / eligibleCount) * 100) : 0
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <button onClick={() => navigate(`/sessions/${poll.sessionId}`)} className="btn-icon flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200">
-        <ArrowLeft className="w-4 h-4" /> Volver a Sesión
-      </button>
+    <div className={`p-4 sm:p-6 space-y-6 max-w-5xl mx-auto ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-950 p-8 overflow-y-auto max-w-none' : ''}`}>
+      {/* Botón de volver y modo proyección */}
+      <div className="flex items-center justify-between">
+        <button onClick={() => navigate(`/sessions/${poll.sessionId}`)} className="btn-icon flex items-center gap-2 text-sm text-slate-400 hover:text-slate-200">
+          <ArrowLeft className="w-4 h-4" /> Volver a Sesión
+        </button>
+
+        <button
+          onClick={() => setIsFullscreen(!isFullscreen)}
+          className="btn-secondary flex items-center gap-2 text-xs font-semibold px-3 py-1.5"
+          title="Modo Proyección (Pantalla Completa)"
+        >
+          {isFullscreen ? <Minimize2 className="w-4 h-4 text-primary-400" /> : <Maximize2 className="w-4 h-4 text-primary-400" />}
+          {isFullscreen ? 'Salir de Proyección' : 'Modo Proyección'}
+        </button>
+      </div>
 
       {feedback && <Alert type={feedback.type} msg={feedback.msg} />}
 
@@ -179,17 +241,17 @@ export default function PollPreviewPage() {
                 : <h1 className="text-lg font-bold text-slate-100">{poll.title}</h1>
               }
               <div className="flex items-center gap-2 mt-1">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLE[poll.status]}`}>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${STATUS_STYLE[poll.status]}`}>
                   {STATUS_LABEL[poll.status]}
                 </span>
-                <span className="text-xs text-slate-500 font-medium bg-slate-800 px-2 py-0.5 rounded-full">
-                  {poll.type === 'NOMINAL' ? 'Voto Nominal' : 'Voto Secreto'}
+                <span className="text-xs text-slate-400 font-medium bg-slate-800 px-2.5 py-0.5 rounded-full">
+                  {poll.type === 'NOMINAL' ? 'Voto Nominal (Público)' : 'Voto Secreto'}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Controls */}
+          {/* President Controls */}
           {isPresident && (
             <div className="flex items-center gap-2 flex-wrap">
               {poll.status === 'PENDING' && !editing && (
@@ -205,9 +267,9 @@ export default function PollPreviewPage() {
               )}
               {nextStatus && !editing && (
                 <button onClick={handleChangeStatus} disabled={nextStatus === 'OPEN' && poll.session.status !== 'ACTIVE'}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition-all disabled:opacity-50
-                    ${nextStatus === 'OPEN' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-                                            : 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/20'}`}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold border shadow-lg transition-all disabled:opacity-50
+                    ${nextStatus === 'OPEN' ? 'bg-emerald-600 hover:bg-emerald-500 border-emerald-400 text-white shadow-emerald-900/30'
+                                            : 'bg-red-600 hover:bg-red-500 border-red-400 text-white shadow-red-900/30'}`}
                 >
                   <ChevronDown className="w-4 h-4" /> {NEXT_LABEL[poll.status]}
                 </button>
@@ -223,11 +285,11 @@ export default function PollPreviewPage() {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-3 border-t border-surface-border">
           <div className="space-y-1">
-            <p className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">Participantes</p>
-            <p className="text-sm text-slate-300 font-medium flex items-center gap-1.5"><Users className="w-4 h-4 text-slate-400"/> {eligibleCount} habilitados</p>
+            <p className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">Habilitados</p>
+            <p className="text-sm text-slate-300 font-medium flex items-center gap-1.5"><Users className="w-4 h-4 text-slate-400"/> {eligibleCount} congresistas</p>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">Tipo</p>
+            <p className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">Tipo de Voto</p>
             <p className="text-sm text-slate-300 font-medium flex items-center gap-1.5">
               <ShieldQuestion className={`w-4 h-4 ${poll.type === 'SECRET' ? 'text-amber-400' : 'text-slate-400'}`}/>
               {poll.type === 'SECRET' ? 'Secreta' : 'Pública'}
@@ -241,10 +303,10 @@ export default function PollPreviewPage() {
             </p>
           </div>
           <div className="space-y-1">
-            <p className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">Resultados en vivo</p>
-            <p className="text-sm text-slate-300 font-medium flex items-center gap-1.5">
-              <BarChart3 className="w-4 h-4 text-slate-400"/>
-              {poll.showResultsLive ? 'Visibles' : 'Ocultos al final'}
+            <p className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">Modo en Vivo</p>
+            <p className="text-sm text-emerald-400 font-semibold flex items-center gap-1.5">
+              <Radio className="w-4 h-4 animate-pulse text-emerald-400"/>
+              WebSockets Activo
             </p>
           </div>
         </div>
@@ -267,7 +329,7 @@ export default function PollPreviewPage() {
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={editShowLive} onChange={e => setEditShowLive(e.target.checked)} className="rounded border-slate-600 bg-slate-800 text-primary-500" />
-                  <span className="text-sm text-slate-300">Mostrar resultados en vivo</span>
+                  <span className="text-sm text-slate-300">Mostrar resultados en vivo a participantes</span>
                 </label>
               </div>
             </div>
@@ -275,78 +337,105 @@ export default function PollPreviewPage() {
         )}
       </div>
 
-      {/* Preview Section */}
-      <div className="card-glass p-6 sm:p-10 space-y-8 bg-surface-card/50 relative overflow-hidden">
-        {/* Decorative background for preview */}
-        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none text-9xl font-bold select-none">
-          PREVIEW
-        </div>
-
-        <div className="relative z-10 text-center space-y-4 max-w-2xl mx-auto">
-          {editing ? (
-            <textarea value={editQuestion} onChange={e => setEditQuestion(e.target.value)} className="input-field text-center text-xl font-medium resize-none" rows={2} placeholder="Escribe la pregunta..." />
-          ) : (
-            <h2 className="text-2xl sm:text-3xl font-bold text-slate-100 tracking-tight leading-tight">
+      {/* ─── PANEL DE TRANSMISIÓN / PROYECCIÓN EN TIEMPO REAL ────────────────── */}
+      <div className="card-glass p-6 sm:p-10 space-y-8 bg-gradient-to-b from-slate-900/90 to-surface-card border-primary-500/30 relative overflow-hidden shadow-2xl">
+        <div className="flex items-center justify-between border-b border-surface-border pb-4">
+          <div>
+            <span className="text-xs font-bold text-primary-400 uppercase tracking-widest">Tablero de Proyección Oficial</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight leading-tight mt-1">
               {poll.question}
             </h2>
-          )}
-          <p className="text-sm text-slate-500">
-            {poll.type === 'SECRET' ? 'Esta votación es secreta. Su identidad no será revelada.' : 'Su voto será registrado y visible junto a su nombre.'}
-          </p>
-        </div>
+          </div>
 
-        <div className="relative z-10 max-w-md mx-auto space-y-3">
-          {editing ? (
-            <div className="space-y-2">
-              {editOptions.map((opt, i) => (
-                <div key={i} className="flex gap-2">
-                  <input value={opt} onChange={e => { const no = [...editOptions]; no[i] = e.target.value; setEditOptions(no) }} className="input-field py-2 flex-1 text-center" />
-                  <button onClick={() => setEditOptions(editOptions.filter((_, idx) => idx !== i))} disabled={editOptions.length <= 2} className="btn-secondary px-3 text-red-400"><Trash2 className="w-4 h-4"/></button>
-                </div>
-              ))}
-              <button onClick={() => setEditOptions([...editOptions, ''])} className="btn-secondary w-full flex items-center justify-center gap-2 py-2"><Plus className="w-4 h-4"/> Añadir opción</button>
-            </div>
-          ) : (
-            poll.options.map(o => (
-              <label key={o.id} className="flex items-center gap-4 p-4 rounded-xl border border-surface-border bg-surface hover:bg-surface/80 hover:border-primary-500/30 transition-colors cursor-not-allowed opacity-80">
-                <div className="w-5 h-5 rounded-full border-2 border-slate-600 flex items-center justify-center shrink-0"></div>
-                <span className="font-medium text-slate-200">{o.text}</span>
-              </label>
-            ))
-          )}
-        </div>
-        
-        {!editing && (
-          <div className="relative z-10 flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            {/* Botón Votar — solo cuando OPEN y el usuario es PARTICIPANT */}
-            {poll.status === 'OPEN' && user?.role === 'PARTICIPANT' && (
-              <button
-                onClick={() => navigate(`/vote/${poll.id}`)}
-                className="btn-primary px-8 py-3 text-base flex items-center gap-2"
-              >
-                <Vote className="w-5 h-5" /> Emitir mi voto
-              </button>
+          <div className="shrink-0 text-right">
+            {poll.status === 'OPEN' && (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                VOTACIÓN EN CURSO
+              </span>
             )}
-
-            {/* Botón Ver Acta — cuando CLOSED */}
-            {poll.status === 'CLOSED' && isPresident && (
-              <button
-                onClick={() => navigate(`/polls/${poll.id}/results`)}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-all"
-              >
-                <FileText className="w-4 h-4" /> Ver Acta Oficial
-              </button>
+            {poll.status === 'CLOSED' && (
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40">
+                <CheckCircle2 className="w-4 h-4" /> VOTACIÓN FINALIZADA
+              </span>
             )}
-
-            {/* Placeholder cuando PENDING */}
             {poll.status === 'PENDING' && (
-              <span className="text-slate-600 text-sm italic">La votación aún no ha sido abierta</span>
-            )}
-            {poll.status === 'CANCELED' && (
-              <span className="text-red-400/60 text-sm italic">Votación cancelada</span>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                <Radio className="w-4 h-4" /> PREPARADA
+              </span>
             )}
           </div>
-        )}
+        </div>
+
+        {/* Barra de participación general */}
+        <div className="card-glass p-5 space-y-2 bg-surface/70 border-surface-border">
+          <div className="flex items-center justify-between text-sm font-semibold">
+            <span className="text-slate-300 flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary-400" />
+              Quórum y Participación
+            </span>
+            <span className="text-slate-100 font-mono text-base">
+              {votedCount} / {eligibleCount} Votos ({participationPct}%)
+            </span>
+          </div>
+          <div className="h-3 bg-surface rounded-full overflow-hidden border border-surface-border p-0.5">
+            <div
+              className="h-full bg-gradient-to-r from-primary-500 to-emerald-400 rounded-full transition-all duration-700"
+              style={{ width: `${participationPct}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Desglose de conteo por opción en tiempo real */}
+        <div className="space-y-4">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Conteo de votos por opción</h3>
+
+          {poll.options.map((opt) => {
+            const countObj = counts.find(c => c.optionId === opt.id)
+            const c = countObj?.count ?? 0
+            const pct = totalVotesCast > 0 ? Math.round((c / totalVotesCast) * 100) : 0
+
+            return (
+              <div key={opt.id} className="p-4 rounded-2xl bg-surface/80 border border-surface-border space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-slate-100">{opt.text}</span>
+                  <div className="text-right">
+                    <span className="text-xl font-extrabold text-primary-300 font-mono">{c}</span>
+                    <span className="text-xs text-slate-400 ml-1.5 font-medium">({pct}%)</span>
+                  </div>
+                </div>
+
+                <div className="h-4 bg-slate-900/80 rounded-full overflow-hidden border border-surface-border p-0.5">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary-600 to-primary-400 rounded-full transition-all duration-700 shadow-md"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Acciones principales del Presidente */}
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4 border-t border-surface-border">
+          {poll.status === 'OPEN' && user?.role === 'PARTICIPANT' && (
+            <button
+              onClick={() => navigate(`/vote/${poll.id}`)}
+              className="btn-primary px-8 py-3 text-base font-bold flex items-center gap-2"
+            >
+              <Vote className="w-5 h-5" /> Emitir mi voto
+            </button>
+          )}
+
+          {poll.status === 'CLOSED' && isPresident && (
+            <button
+              onClick={() => navigate(`/polls/${poll.id}/results`)}
+              className="flex items-center gap-2 px-8 py-3.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-base font-bold transition-all shadow-xl shadow-violet-900/30"
+            >
+              <FileText className="w-5 h-5" /> Ver e Imprimir Acta Oficial
+            </button>
+          )}
+        </div>
       </div>
 
     </div>

@@ -14,6 +14,77 @@ const castVoteSchema = z.object({
   voteToken: z.string().min(10, 'Token de voto requerido para votación secreta.').optional(),
 });
 
+// ─── GET /api/polls/:pollId/my-vote ──────────────────────────────────────────
+votesRouter.get(
+  '/polls/:pollId/my-vote',
+  requireAuth,
+  async (req: Request, res: Response): Promise<void> => {
+    const { pollId } = req.params;
+    const userId = req.user!.id;
+
+    try {
+      const poll = await prisma.poll.findUnique({
+        where: { id: pollId },
+        include: { options: true },
+      });
+
+      if (!poll) {
+        res.status(404).json({ error: 'Votación no encontrada.' });
+        return;
+      }
+
+      let voted = false;
+      let selectedOptionId: string | null = null;
+
+      if (poll.type === PollType.NOMINAL) {
+        const nominalVote = await prisma.nominalVote.findUnique({
+          where: { pollId_userId: { pollId, userId } },
+        });
+        if (nominalVote) {
+          voted = true;
+          selectedOptionId = nominalVote.optionId;
+        }
+      } else {
+        const registry = await prisma.secretVoterRegistry.findUnique({
+          where: { pollId_userId: { pollId, userId } },
+        });
+        if (registry) {
+          voted = true;
+        }
+      }
+
+      const [votedCount, totalEligible] = await Promise.all([
+        poll.type === PollType.NOMINAL
+          ? prisma.nominalVote.count({ where: { pollId } })
+          : prisma.secretVoterRegistry.count({ where: { pollId } }),
+        prisma.sessionParticipant.count({
+          where: { sessionId: poll.sessionId, user: { isActive: true } },
+        }),
+      ]);
+
+      const results = await Promise.all(
+        poll.options.map(async (opt) => {
+          const count = poll.type === PollType.NOMINAL
+            ? await prisma.nominalVote.count({ where: { pollId, optionId: opt.id } })
+            : await prisma.secretVote.count({ where: { pollId, optionId: opt.id } });
+          return { optionId: opt.id, text: opt.text, count };
+        })
+      );
+
+      res.json({
+        voted,
+        selectedOptionId,
+        votedCount,
+        totalEligible,
+        results,
+      });
+    } catch (err) {
+      console.error('[VOTES] Error obteniendo voto del usuario:', err);
+      res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+  }
+);
+
 // ─── POST /api/polls/:pollId/votes ──────────────────────────────────────────
 votesRouter.post(
   '/polls/:pollId/votes',
