@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Plus, Edit3, ToggleLeft, ToggleRight, Loader2, AlertCircle, CheckCircle2, X, Search } from 'lucide-react'
+import { Users, Plus, Edit3, ToggleLeft, ToggleRight, Loader2, AlertCircle, CheckCircle2, X, Search, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL ?? '/api'
@@ -8,7 +8,7 @@ type UserRole = 'SUPERADMIN' | 'ADMIN' | 'PRESIDENT' | 'AUDITOR' | 'PARTICIPANT'
 
 interface User {
   id: string; identifier: string; name: string
-  role: UserRole; isActive: boolean; createdAt: string
+  role: UserRole; isActive: boolean; activeSessionId?: string | null; createdAt: string
   _count: { sessions: number }
 }
 
@@ -199,6 +199,19 @@ export default function UsersPage() {
     } catch (err) { flash('error', err instanceof Error ? err.message : 'Error.') }
   }
 
+  const handleClearSession = async (u: User) => {
+    if (!window.confirm(`¿Confirmas liberar la sesión activa de "${u.name}"? Esto le permitirá iniciar sesión en un nuevo dispositivo.`)) return
+    try {
+      const res = await fetch(`${API}/users/${u.id}/clear-session`, {
+        method: 'POST', credentials: 'include',
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      flash('success', data.message)
+      load()
+    } catch (err) { flash('error', err instanceof Error ? err.message : 'Error al liberar sesión.') }
+  }
+
   const handleSaved = () => { setModal({ open: false }); load() }
 
   return (
@@ -247,7 +260,7 @@ export default function UsersPage() {
                   <th className="text-left px-4 py-3">Nombre</th>
                   <th className="text-left px-4 py-3">Identificador</th>
                   <th className="text-left px-4 py-3">Rol</th>
-                  <th className="text-left px-4 py-3">Sesiones</th>
+                  <th className="text-left px-4 py-3">Sesión Activa</th>
                   <th className="text-left px-4 py-3">Estado</th>
                   <th className="text-right px-4 py-3">Acciones</th>
                 </tr>
@@ -265,7 +278,15 @@ export default function UsersPage() {
                         {ROLE_LABELS[u.role]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{u._count.sessions}</td>
+                    <td className="px-4 py-3">
+                      {u.activeSessionId ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Dispositivo activo
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-600">Sin sesión</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border
                         ${u.isActive
@@ -276,6 +297,12 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {u.activeSessionId && (
+                          <button onClick={() => handleClearSession(u)}
+                            className="p-1.5 text-amber-500 hover:text-amber-400 transition-colors" title="Liberar sesión de dispositivo">
+                            <LogOut className="w-4 h-4" />
+                          </button>
+                        )}
                         <button onClick={() => setModal({ open: true, user: u })}
                           className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors" title="Editar">
                           <Edit3 className="w-4 h-4" />

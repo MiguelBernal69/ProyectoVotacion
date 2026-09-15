@@ -45,10 +45,12 @@ model User {
   identifier     String   @unique // DNI, Matrícula institucional, etc.
   name           String
   passwordHash   String
-  role           Role     @default(PARTICIPANT)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  role            Role     @default(PARTICIPANT)
+  isActive        Boolean  @default(true)
+  activeSessionId String?  // ID de la sesión activa en dispositivo (null = sin sesión)
+  lastActiveAt    DateTime? // Última actividad registrada
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   // Relaciones
   sessions       SessionParticipant[]

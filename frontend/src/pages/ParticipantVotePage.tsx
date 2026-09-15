@@ -67,6 +67,18 @@ export default function ParticipantVotePage() {
       setPoll(p)
       setTotalVoters(data.eligibleCount ?? 0)
 
+      if (p.type === 'SECRET') {
+        const key = `voteToken_${p.id}`
+        let token = localStorage.getItem(key)
+        if (!token) {
+          token = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `token-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+          localStorage.setItem(key, token)
+        }
+        setVoteToken(token)
+      }
+
       // Cargar el voto actual del usuario y resultados
       const voteRes = await fetch(`${API}/polls/${pollId}/my-vote`, { credentials: 'include' })
       if (voteRes.ok) {
@@ -149,7 +161,21 @@ export default function ParticipantVotePage() {
     setError(null)
     try {
       const body: any = { optionId: selected }
-      if (poll.type === 'SECRET' && voteToken) body.voteToken = voteToken
+      if (poll.type === 'SECRET') {
+        let tokenToSend = voteToken
+        if (!tokenToSend) {
+          const key = `voteToken_${poll.id}`
+          tokenToSend = localStorage.getItem(key)
+          if (!tokenToSend) {
+            tokenToSend = typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `token-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+            localStorage.setItem(key, tokenToSend)
+          }
+          setVoteToken(tokenToSend)
+        }
+        body.voteToken = tokenToSend
+      }
 
       const res = await fetch(`${API}/polls/${poll.id}/votes`, {
         method: 'POST',

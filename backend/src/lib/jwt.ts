@@ -4,6 +4,7 @@ import { Role } from '@prisma/client';
 export interface JwtPayload {
   userId: string;
   role: Role;
+  sessionId?: string;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET;

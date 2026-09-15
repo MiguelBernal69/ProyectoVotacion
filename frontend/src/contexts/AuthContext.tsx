@@ -59,7 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ identifier, password }),
     })
 
-    const data = await res.json()
+    let data: any = {}
+    try {
+      data = await res.json()
+    } catch {
+      throw new Error(`Respuesta no válida del servidor (Status ${res.status}).`)
+    }
+
     if (!res.ok) throw new Error(data.error ?? 'Error al iniciar sesión.')
     setUser(data.user)
   }

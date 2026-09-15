@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma';
 import { signToken } from '../lib/jwt';
@@ -35,7 +36,16 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     // 2. Buscar usuario
     const user = await prisma.user.findUnique({
       where: { identifier },
-      select: { id: true, identifier: true, name: true, role: true, isActive: true, passwordHash: true },
+      select: {
+        id: true,
+        identifier: true,
+        name: true,
+        role: true,
+        isActive: true,
+        passwordHash: true,
+        activeSessionId: true,
+        lastActiveAt: true,
+      },
     });
 
     // 3. Usuario no encontrado → mismo mensaje que contraseña incorrecta (no revelar existencia)
@@ -57,24 +67,43 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // 6. Firmar JWT (contiene userId y role)
-    const token = signToken({ userId: user.id, role: user.role });
+    // 6. Verificar si ya existe una sesión activa registrada en la base de datos
+    if (user.activeSessionId) {
+      res.status(409).json({
+        error:
+          'Ya tienes una sesión activa en otro dispositivo. Por favor, cierra sesión en el anterior dispositivo o contacta a un administrador para liberar tu sesión.',
+      });
+      return;
+    }
 
-    // 7. Inyectar token como cookie HttpOnly (nunca en el body)
+    // 7. Generar nuevo ID de sesión e instituirla en la BD
+    const newSessionId = crypto.randomUUID();
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        activeSessionId: newSessionId,
+        lastActiveAt: new Date(),
+      },
+    });
+
+    // 8. Firmar JWT (contiene userId, role y sessionId)
+    const token = signToken({ userId: user.id, role: user.role, sessionId: newSessionId });
+
+    // 9. Inyectar token como cookie HttpOnly (nunca en el body)
     res.cookie('token', token, COOKIE_OPTIONS);
 
-    // 8. Registrar evento de auditoría
+    // 10. Registrar evento de auditoría
     await prisma.auditLog.create({
       data: {
         action: 'USER_LOGIN',
         userId: user.id,
-        details: { identifier: user.identifier, role: user.role },
-        hash: `login-${user.id}-${Date.now()}`,   // Hash real se implementará en Fase 5
+        details: { identifier: user.identifier, role: user.role, sessionId: newSessionId },
+        hash: `login-${user.id}-${Date.now()}`,
         previousHash: 'pending-chain',
       },
     });
 
-    // 9. Devolver datos públicos del usuario (sin passwordHash)
+    // 11. Devolver datos públicos del usuario (sin passwordHash)
     res.status(200).json({
       message: 'Sesión iniciada correctamente.',
       user: {
@@ -92,15 +121,22 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
 
 // ─── POST /api/auth/logout ─────────────────────────────────────────────────
 authRouter.post('/logout', requireAuth, async (req: Request, res: Response): Promise<void> => {
-  await prisma.auditLog.create({
-    data: {
-      action: 'USER_LOGOUT',
-      userId: req.user!.id,
-      details: { identifier: req.user!.identifier },
-      hash: `logout-${req.user!.id}-${Date.now()}`,
-      previousHash: 'pending-chain',
-    },
-  });
+  if (req.user?.id) {
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { activeSessionId: null },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        action: 'USER_LOGOUT',
+        userId: req.user.id,
+        details: { identifier: req.user.identifier },
+        hash: `logout-${req.user.id}-${Date.now()}`,
+        previousHash: 'pending-chain',
+      },
+    });
+  }
 
   res.clearCookie('token', COOKIE_OPTIONS);
   res.status(200).json({ message: 'Sesión cerrada correctamente.' });

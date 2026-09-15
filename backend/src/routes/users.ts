@@ -51,7 +51,7 @@ usersRouter.get(
         where,
         select: {
           id: true, identifier: true, name: true,
-          role: true, isActive: true, createdAt: true,
+          role: true, isActive: true, activeSessionId: true, lastActiveAt: true, createdAt: true,
           _count: { select: { sessions: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -123,7 +123,7 @@ usersRouter.get(
         where:  { id: req.params.id },
         select: {
           id: true, identifier: true, name: true,
-          role: true, isActive: true, createdAt: true,
+          role: true, isActive: true, activeSessionId: true, lastActiveAt: true, createdAt: true,
           sessions: {
             select: {
               isPresent: true,
@@ -246,6 +246,39 @@ usersRouter.patch(
       });
     } catch (err) {
       console.error('[USERS] Error cambiando estado de usuario:', err);
+      res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+  }
+);
+
+// ─── POST /api/users/:id/clear-session ──────────────────────────────────────
+usersRouter.post(
+  '/:id/clear-session',
+  requireAuth,
+  requireRoles(MANAGER_ROLES),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+      if (!existing) { res.status(404).json({ error: 'Usuario no encontrado.' }); return; }
+
+      const user = await prisma.user.update({
+        where: { id: req.params.id },
+        data: { activeSessionId: null },
+        select: { id: true, identifier: true, name: true, role: true, isActive: true, activeSessionId: true },
+      });
+
+      await createAuditLog({
+        action: 'USER_SESSION_CLEARED_BY_ADMIN',
+        userId: req.user!.id,
+        details: { targetUserId: user.id, identifier: user.identifier },
+      });
+
+      res.json({
+        message: `Sesión del usuario "${user.identifier}" liberada correctamente. Ahora puede iniciar sesión en cualquier dispositivo.`,
+        user,
+      });
+    } catch (err) {
+      console.error('[USERS] Error liberando sesión de usuario:', err);
       res.status(500).json({ error: 'Error interno del servidor.' });
     }
   }

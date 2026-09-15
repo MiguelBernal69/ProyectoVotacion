@@ -18,10 +18,17 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const payload = verifyToken(token);
 
-    // Siempre verificar contra la BD para obtener datos actuales y verificar isActive
+    // Siempre verificar contra la BD para obtener datos actuales y verificar isActive y activeSessionId
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
-      select: { id: true, identifier: true, name: true, role: true, isActive: true },
+      select: {
+        id: true,
+        identifier: true,
+        name: true,
+        role: true,
+        isActive: true,
+        activeSessionId: true,
+      },
     });
 
     if (!user) {
@@ -34,6 +41,19 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(403).json({ error: 'Cuenta desactivada. Contacte al administrador.' });
       return;
     }
+
+    // Verificar si la sesión guardada en la cookie aún coincide con la sesión activa en BD
+    if (payload.sessionId && payload.sessionId !== user.activeSessionId) {
+      res.clearCookie('token');
+      res.status(401).json({ error: 'Tu sesión ha sido cerrada o liberada en este dispositivo.' });
+      return;
+    }
+
+    // Actualizar última actividad sin bloquear
+    void prisma.user.update({
+      where: { id: user.id },
+      data: { lastActiveAt: new Date() },
+    }).catch(() => {});
 
     req.user = user;
     next();
