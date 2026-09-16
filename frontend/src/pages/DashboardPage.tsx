@@ -221,20 +221,20 @@ export default function DashboardPage() {
   const roleLabel = ROLE_LABELS[user.role] ?? user.role
 
   return (
-    <div className="min-h-screen bg-surface p-4 sm:p-6 space-y-6">
+    <div className="min-h-screen bg-surface p-3 sm:p-6 space-y-4 sm:space-y-6">
 
       {/* Header de usuario */}
-      <div className="card-glass p-4 flex items-center justify-between">
+      <div className="card-glass p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary-600/20 border border-primary-500/30 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-primary-600/20 border border-primary-500/30 flex items-center justify-center shrink-0">
             <User className="w-5 h-5 text-primary-400" />
           </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-200">{user.name}</p>
-            <p className="text-xs text-slate-500">{user.identifier}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-slate-200 truncate">{user.name}</p>
+            <p className="text-xs text-slate-500 font-mono truncate">{user.identifier}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-end sm:self-auto">
           <span className={`text-xs px-2.5 py-1 rounded-full border font-medium ${roleColor}`}>{roleLabel}</span>
           <button onClick={handleLogout} className="p-2 rounded-xl border border-surface-border text-slate-500 hover:text-red-400 hover:border-red-500/30 transition-all" title="Cerrar sesión">
             <LogOut className="w-4 h-4" />

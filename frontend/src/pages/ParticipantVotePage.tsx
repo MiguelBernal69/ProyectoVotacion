@@ -15,7 +15,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { io, Socket } from 'socket.io-client'
 import {
   CheckCircle2, Clock, XCircle, ChevronRight, Loader2,
-  ShieldCheck, AlertCircle, RefreshCw, ArrowLeft, Lock, Edit3, Vote, BarChart3
+  ShieldCheck, AlertCircle, RefreshCw, ArrowLeft, Lock, Edit3, BarChart3
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 

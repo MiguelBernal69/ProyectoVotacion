@@ -215,16 +215,16 @@ export default function UsersPage() {
   const handleSaved = () => { setModal({ open: false }); load() }
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2.5">
-            <Users className="w-6 h-6 text-primary-400" /> Gestión de Usuarios
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-100 flex items-center gap-2.5">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary-400" /> Gestión de Usuarios
           </h1>
-          <p className="text-sm text-slate-500 mt-1">Participantes y personal del sistema</p>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Participantes y personal del sistema</p>
         </div>
-        <button onClick={() => setModal({ open: true })} className="btn-primary flex items-center gap-2">
+        <button onClick={() => setModal({ open: true })} className="btn-primary flex items-center gap-2 self-start sm:self-auto">
           <Plus className="w-4 h-4" /> Nuevo usuario
         </button>
       </div>
@@ -233,14 +233,14 @@ export default function UsersPage() {
       {error    && <Alert type="error" msg={error} />}
 
       {/* Filters */}
-      <div className="card-glass p-4 flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
+      <div className="card-glass p-3.5 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre o identificador…"
             className="input-field pl-9 w-full" />
         </div>
-        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="input-field w-auto">
+        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} className="input-field w-full sm:w-auto">
           <option value="all">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
         </select>

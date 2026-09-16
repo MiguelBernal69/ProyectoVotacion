@@ -159,3 +159,37 @@ ProyectoVotacion/
 - **Hot-reload**: Tanto Vite (frontend) como `tsx watch` (backend) recargan automáticamente al guardar cambios.
 - **Singleton Prisma**: Evita múltiples conexiones a la BD en hot-reload.
 - **TypeScript strict**: 0 errores ni `any` implícito en ambos proyectos.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Aplicar las migraciones a la base de datos local y regenerar el cliente: En la carpeta backend, ejecuta:
+
+npx prisma migrate dev
+
+o si la base de datos ya tiene estructura y solo quieres aplicar los archivos de migración pendientes sin prompt interactivo:
+
+npx prisma migrate deploy
+npx prisma generate
+
+
+
+
+
+

@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { io, Socket } from 'socket.io-client'
 import {
   BarChart3, ArrowLeft, Edit3, Loader2, AlertCircle, CheckCircle2, ChevronDown, X,
-  Users, CheckSquare, ShieldQuestion, Trash2, Plus, FileText, Vote, Maximize2, Minimize2, Radio
+  Users, CheckSquare, ShieldQuestion, FileText, Vote, Maximize2, Minimize2, Radio
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
