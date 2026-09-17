@@ -275,7 +275,7 @@ sessionsRouter.get(
 sessionsRouter.post(
   '/:id/participants',
   requireAuth,
-  requireRoles([Role.SUPERADMIN, Role.ADMIN]),
+  requireRoles([Role.SUPERADMIN, Role.ADMIN, Role.PRESIDENT]),
   async (req: Request, res: Response): Promise<void> => {
     const result = addParticipantSchema.safeParse(req.body);
     if (!result.success) {
@@ -296,6 +296,11 @@ sessionsRouter.post(
 
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) { res.status(404).json({ error: 'Usuario no encontrado.' }); return; }
+
+      if (user.role === Role.PRESIDENT) {
+        res.status(400).json({ error: 'Los usuarios con rol PRESIDENTE son moderadores y no forman parte de la lista de votantes.' });
+        return;
+      }
 
       // Verificar si ya es participante
       const existing = await prisma.sessionParticipant.findUnique({
@@ -332,14 +337,14 @@ sessionsRouter.post(
 sessionsRouter.delete(
   '/:id/participants/:userId',
   requireAuth,
-  requireRoles([Role.SUPERADMIN, Role.ADMIN]),
+  requireRoles([Role.SUPERADMIN, Role.ADMIN, Role.PRESIDENT]),
   async (req: Request, res: Response): Promise<void> => {
     try {
       const session = await prisma.session.findUnique({ where: { id: req.params.id } });
       if (!session) { res.status(404).json({ error: 'Sesión no encontrada.' }); return; }
 
-      if (session.status !== 'PENDING') {
-        res.status(409).json({ error: 'Solo se pueden remover participantes de sesiones en estado PENDIENTE.' });
+      if (session.status === 'CLOSED') {
+        res.status(409).json({ error: 'No se pueden remover participantes de una sesión cerrada.' });
         return;
       }
 

@@ -51,9 +51,11 @@ app.use('/api', globalLimiter);
 
 // Rate limiting estricto para el endpoint de login (contra fuerza bruta)
 // Se desactiva en entorno de test para no bloquear la suite de pruebas
+// Se desactiva el límite estricto por defecto para facilitar pruebas.
+// Para habilitarlo en producción, cambiar `max` a un valor bajo (ej. 10).
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'test' ? 1000 : 10,
+  max: 1000, // Límite alto por defecto (desactivado en la práctica)
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiados intentos de inicio de sesión. Espere 15 minutos.' },

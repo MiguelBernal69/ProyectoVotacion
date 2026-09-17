@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { PollStatus, PollType } from '@prisma/client';
+import { PollStatus, PollType, Role } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAuth } from '../middlewares/requireAuth';
 import crypto from 'crypto';
@@ -121,6 +121,10 @@ votesRouter.post(
         }
 
         // C. Verificar que el usuario está habilitado en la sesión
+        if (req.user!.role === Role.PRESIDENT) {
+          throw new Error('PRESIDENT_CANNOT_VOTE');
+        }
+
         const participant = await tx.sessionParticipant.findUnique({
           where: { sessionId_userId: { sessionId: poll.sessionId, userId } },
           include: { user: true },
@@ -128,6 +132,10 @@ votesRouter.post(
 
         if (!participant || !participant.user.isActive) {
           throw new Error('NOT_ELIGIBLE');
+        }
+
+        if (participant.user.role === Role.PRESIDENT) {
+          throw new Error('PRESIDENT_CANNOT_VOTE');
         }
 
         // ==========================================
@@ -260,6 +268,8 @@ votesRouter.post(
           res.status(400).json({ error: 'La opción seleccionada no pertenece a esta votación.' }); break;
         case 'NOT_ELIGIBLE':
           res.status(403).json({ error: 'No estás habilitado para votar en esta sesión.' }); break;
+        case 'PRESIDENT_CANNOT_VOTE':
+          res.status(403).json({ error: 'El usuario con rol Presidente es moderador de la sesión y no emite voto.' }); break;
         case 'ALREADY_VOTED':
           res.status(409).json({ error: 'Ya has emitido tu voto y no se permiten modificaciones.' }); break;
         case 'MISSING_TOKEN':

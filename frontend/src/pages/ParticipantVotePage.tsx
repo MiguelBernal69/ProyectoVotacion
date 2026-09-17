@@ -41,7 +41,7 @@ interface VoteResultItem { optionId: string; text?: string; count: number }
 export default function ParticipantVotePage() {
   const { pollId } = useParams<{ pollId: string }>()
   const navigate   = useNavigate()
-  const { user: _user } = useAuth()
+  const { user } = useAuth()
 
   const [view, setView]                 = useState<ViewState>('LOADING')
   const [poll, setPoll]                 = useState<Poll | null>(null)
@@ -58,6 +58,12 @@ export default function ParticipantVotePage() {
 
   // ─── Cargar datos de la votación y el voto del usuario ─────────────────────
   const loadPoll = useCallback(async () => {
+    if (user?.role === 'PRESIDENT') {
+      setError('Como Presidente de la sesión, tu función es la moderación y gestión de la votación, por lo cual no ejerces derecho a voto.')
+      setView('ERROR')
+      return
+    }
+
     try {
       const res = await fetch(`${API}/polls/${pollId}`, { credentials: 'include' })
       const data = await res.json()

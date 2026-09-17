@@ -160,6 +160,25 @@ ProyectoVotacion/
 - **Singleton Prisma**: Evita múltiples conexiones a la BD en hot-reload.
 - **TypeScript strict**: 0 errores ni `any` implícito en ambos proyectos.
 
+### Configuración de Seguridad (Rate Limit)
+
+Por defecto, el límite estricto de intentos de inicio de sesión ha sido **desactivado** (permitiendo 1000 intentos) en `backend/src/app.ts` para facilitar pruebas en todos los entornos, incluyendo producción. 
+Si deseas activar la protección contra fuerza bruta para el despliegue final, el administrador puede habilitarlo modificando el archivo `backend/src/app.ts`:
+
+1. Abre `backend/src/app.ts`
+2. Busca la configuración de `loginLimiter`.
+3. Cambia el valor de `max` (ej. a `10` para permitir solo 10 intentos cada 15 minutos):
+
+```typescript
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10, // <- Cambiar de 1000 a 10
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+```
+4. Reinicia el servidor backend para aplicar los cambios.
+
 
 
 

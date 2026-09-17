@@ -42,25 +42,25 @@ interface IntegrityInfo {
 
 export default function ResultsPage() {
   const { pollId } = useParams<{ pollId: string }>()
-  const navigate   = useNavigate()
-  const { user }   = useAuth()
+  const navigate = useNavigate()
+  const { user } = useAuth()
 
-  const [result, setResult]       = useState<ResultData | null>(null)
+  const [result, setResult] = useState<ResultData | null>(null)
   const [integrity, setIntegrity] = useState<IntegrityInfo | null>(null)
-  const [loading, setLoading]     = useState(true)
+  const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
-  const [error, setError]         = useState<string | null>(null)
-  const [feedback, setFeedback]   = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null)
 
   const canGenerate = user && ['SUPERADMIN', 'ADMIN', 'PRESIDENT'].includes(user.role)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
-      const res  = await fetch(`${API}/polls/${pollId}/results`, { credentials: 'include' })
+      const res = await fetch(`${API}/polls/${pollId}/results`, { credentials: 'include' })
       const data = await res.json()
       if (res.status === 404) { setResult(null) }
-      else if (!res.ok)      { throw new Error(data.error) }
+      else if (!res.ok) { throw new Error(data.error) }
       else {
         setResult(data.data)
         setIntegrity(data.integrity)
@@ -77,7 +77,7 @@ export default function ResultsPage() {
   const generate = async () => {
     setGenerating(true); setFeedback(null)
     try {
-      const res  = await fetch(`${API}/polls/${pollId}/results`, { method: 'POST', credentials: 'include' })
+      const res = await fetch(`${API}/polls/${pollId}/results`, { method: 'POST', credentials: 'include' })
       const data = await res.json()
       if (!res.ok) { setFeedback({ type: 'err', msg: data.error ?? 'Error al generar.' }); return }
       setFeedback({ type: 'ok', msg: 'Acta generada exitosamente.' })
@@ -239,6 +239,68 @@ export default function ResultsPage() {
             </div>
           </div>
 
+          {/* Gráfico exclusivo: A favor vs En contra */}
+          {(() => {
+            const favor = d.summary.find(o => o.text.toLowerCase().includes('favor'))?.count ?? 0
+            const contra = d.summary.find(o => o.text.toLowerCase().includes('contra'))?.count ?? 0
+            const totalEfectivos = favor + contra
+
+            if (totalEfectivos > 0) {
+              const pctFavorFloat = (favor / totalEfectivos) * 100
+              const pctFavor = Math.round(pctFavorFloat)
+              const pctContra = 100 - pctFavor
+
+              return (
+                <div className="card-glass p-5 space-y-4 border-l-4 border-primary-500">
+                  <div>
+                    <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide">Gráfico de Votos Efectivos (A favor vs En contra)</h2>
+                    <p className="text-xs text-slate-500 mt-1">Porcentaje calculado exclusivamente entre votos a favor y en contra ({totalEfectivos} votos efectivos en total).</p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-around gap-6 py-4">
+                    {/* Gráfico de Pie / Donut Circular */}
+                    <div className="relative w-44 h-44 rounded-full flex items-center justify-center shadow-xl shrink-0 transition-all"
+                      style={{
+                        background: `conic-gradient(#10b981 0% ${pctFavorFloat}%, #ef4444 ${pctFavorFloat}% 100%)`
+                      }}>
+                      <div className="w-28 h-28 rounded-full bg-slate-900/90 backdrop-blur flex flex-col items-center justify-center shadow-inner text-center p-2 border border-slate-700/50">
+                        <span className="text-[10px] text-slate-400 uppercase tracking-widest font-semibold">Total</span>
+                        <span className="text-xl font-extrabold text-slate-100">{totalEfectivos}</span>
+                        <span className="text-[10px] text-slate-500">votos</span>
+                      </div>
+                    </div>
+
+                    {/* Leyenda y Detalles */}
+                    <div className="space-y-3 w-full sm:w-auto min-w-[220px]">
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-surface/60 border border-emerald-500/20">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-md shadow-emerald-500/50 shrink-0" />
+                          <span className="font-semibold text-emerald-400 text-sm">A favor</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-slate-100">{favor}</span>
+                          <span className="text-xs text-slate-400 ml-1 font-medium">({pctFavor}%)</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-surface/60 border border-red-500/20">
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-md shadow-red-500/50 shrink-0" />
+                          <span className="font-semibold text-red-400 text-sm">En contra</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm font-bold text-slate-100">{contra}</span>
+                          <span className="text-xs text-slate-400 ml-1 font-medium">({pctContra}%)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+            return null
+          })()}
+
           {/* Detalle nominal */}
           {d.type === 'NOMINAL' && d.summary.some(s => s.voters && s.voters.length > 0) && (
             <div className="card-glass p-5 space-y-4">
@@ -257,7 +319,9 @@ export default function ResultsPage() {
                           </div>
                           <div>
                             <p className="text-xs font-medium text-slate-300">{v.name}</p>
-                            <p className="text-xs text-slate-600">{v.identifier}</p>
+
+                            {/* el nombre de los usuarios */}
+                            {/* <p className="text-xs text-slate-600">{v.identifier}</p> */}
                           </div>
                         </div>
                         <span className="text-xs text-slate-600">

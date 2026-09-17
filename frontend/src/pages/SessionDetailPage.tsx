@@ -315,7 +315,7 @@ export default function SessionDetailPage() {
   if (error || !session) return <div className="p-6"><Alert type="error" msg={error ?? 'Sesión no encontrada.'} /></div>
 
   const participantIds = new Set(session.participants.map(p => p.userId))
-  const available = allUsers.filter(u => !participantIds.has(u.id))
+  const available = allUsers.filter(u => !participantIds.has(u.id) && u.role !== 'PRESIDENT')
   const nextStatus = NEXT_STATUS[session.status]
 
   return (
@@ -435,8 +435,9 @@ export default function SessionDetailPage() {
             <div className="p-3 rounded-xl bg-surface border border-surface-border space-y-2 mb-3">
               <select value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)} className="input-field py-1.5 text-xs">
                 <option value="">Seleccionar usuario...</option>
-                {available.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                {available.map(u => <option key={u.id} value={u.id}>{u.name} ({ROLE_LABELS[u.role] ?? u.role})</option>)}
               </select>
+              <p className="text-[10px] text-slate-500 italic">Nota: Los usuarios con rol Presidente son moderadores y no emiten voto.</p>
               <div className="flex gap-2">
                 <button onClick={() => { setShowAddUser(false); setSelectedUserId('') }} className="btn-secondary text-xs py-1.5 flex-1">Cancelar</button>
                 <button onClick={handleAddParticipant} disabled={!selectedUserId || addingUser} className="btn-primary text-xs py-1.5 flex-1">Agregar</button>
@@ -456,8 +457,8 @@ export default function SessionDetailPage() {
                     <p className="text-xs font-semibold text-slate-200 truncate">{p.user.name}</p>
                     <p className="text-[10px] text-slate-500 font-mono truncate">{ROLE_LABELS[p.user.role]} — {p.user.isActive ? 'Habilitado' : 'Inactivo'}</p>
                   </div>
-                  {isManager && session.status === 'PENDING' && (
-                    <button onClick={() => handleRemoveParticipant(p.userId, p.user.name)} className="text-slate-600 hover:text-red-400 p-1" title="Remover">
+                  {isPresident && session.status !== 'CLOSED' && (
+                    <button onClick={() => handleRemoveParticipant(p.userId, p.user.name)} className="text-slate-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-red-500/10 transition-colors" title="Remover participante">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   )}

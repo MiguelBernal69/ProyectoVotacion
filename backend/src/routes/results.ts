@@ -329,7 +329,7 @@ resultsRouter.get(
             doc.font('Helvetica-Bold').text('Votaron por "' + opt.text + '":');
             doc.font('Helvetica');
             opt.voters.forEach((v: any) => {
-              doc.text('  \u2022 ' + v.name + ' (' + v.identifier + ')');
+              doc.text('  \u2022 ' + v.name);
             });
             doc.moveDown(0.5);
           }

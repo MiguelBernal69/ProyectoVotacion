@@ -12,7 +12,7 @@ export function initSocket(httpServer: HttpServer): Server {
 
   io = new Server(httpServer, {
     cors: {
-      origin: (origin, callback) => {
+      origin: (_origin, callback) => {
         // En desarrollo o cuando se accede por IP local (LAN), permitir el origen
         callback(null, true);
       },
