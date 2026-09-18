@@ -43,13 +43,15 @@ services:
       PORT: ${BACKEND_PORT:-4000}
       NODE_ENV: production
       FRONTEND_URL: ${FRONTEND_URL}
+      JWT_SECRET: ${JWT_SECRET:-prod_jwt_secret_key_change_me_super_secure_random_64_bytes}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
     ports:
       - "${BACKEND_PORT:-4000}:${BACKEND_PORT:-4000}"
     depends_on:
       db:
         condition: service_healthy
     command: >
-      sh -c "npx prisma migrate deploy && node dist/index.js"
+      sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/index.js"
 
   # ─── Frontend (React SPA vía nginx) ───────────────────────────
   frontend:
@@ -58,11 +60,11 @@ services:
       dockerfile: Dockerfile
       target: production
       args:
-        VITE_API_URL: ${VITE_API_URL}
+        VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: votacion_frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT:-8080}:80"
     depends_on:
       - backend
 

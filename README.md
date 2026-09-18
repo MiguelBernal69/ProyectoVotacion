@@ -1,214 +1,87 @@
 # Sistema de Votación Electrónica Institucional
 
-Sistema web para gestión de votaciones electrónicas en sesiones, conferencias, asambleas y reuniones institucionales. Soporta ~70 participantes simultáneos con garantías de seguridad, integridad, auditoría y comunicación en tiempo real.
+Sistema web para gestión de votaciones electrónicas en sesiones, conferencias, asambleas y reuniones institucionales. Soporta participantes simultáneos con garantías de seguridad, integridad, auditoría y comunicación en tiempo real.
 
-## Stack tecnológico
+## Stack Tecnológico
 
 | Capa | Tecnología |
 |------|-----------|
 | Frontend | React 19 + Vite + TypeScript + Tailwind CSS |
 | Backend | Node.js + Express + TypeScript |
-| Tiempo real | Socket.IO (Fase 4) |
+| Tiempo real | Socket.IO |
 | Base de datos | PostgreSQL 15 |
 | ORM | Prisma |
 | Autenticación | JWT (HttpOnly cookies) |
 | Validación | Zod |
-| Infraestructura | Docker (solo producción) |
-
-## Fases de implementación
-
-- [x] **Fase 1** — Infraestructura base
-- [ ] **Fase 2** — Autenticación, Roles y Usuarios
-- [ ] **Fase 3** — Sesiones y Votaciones
-- [ ] **Fase 4** — Motor de Votación con tiempo real
-- [ ] **Fase 5** — Auditoría y Resultados
-- [ ] **Fase 6** — Despliegue y QA
+| Infraestructura | Docker (Docker Compose + Nginx) |
 
 ---
 
-## Desarrollo local (sin Docker)
+## 🚀 Despliegue Temporal en Servidor Compartido (`app.med.umss.edu.bo` / `10.80.16.15`)
 
-### Requisitos previos
+Dado que el servidor ya tiene páginas o servicios activos en el puerto **80**, este sistema está preconfigurado para ejecutarse de forma **100% aislada en el Puerto 8080**, sin interferir ni tocar los servicios existentes en el servidor.
 
-- Node.js 20+
-- PostgreSQL 15 instalado localmente
-  - **O** solo levantar el contenedor de la BD: `docker compose up db -d`
+### 1. Requisitos Previos en el Servidor
+- Tener instalado **Docker** y **Docker Compose**.
 
-### 1. Instalar dependencias
+### 2. Iniciar el Sistema (Despliegue)
 
-```powershell
-# Backend
-cd backend
-npm install
+Ejecuta desde la raíz del proyecto en el servidor:
 
-# Frontend
-cd ..\frontend
-npm install
-```
-
-### 2. Configurar variables de entorno
-
-```powershell
-# Backend — editar si cambiaste las credenciales de PostgreSQL
-# Archivo: backend\.env
-DATABASE_URL="postgresql://votacion_user:votacion_pass_change_me@localhost:5432/votacion_db?schema=public"
-PORT=4000
-NODE_ENV=development
-FRONTEND_URL=http://localhost:3000
-```
-
-### 3. Crear la base de datos y aplicar migraciones
-
-```powershell
-# Si usas PostgreSQL local, crea el usuario y la base primero:
-psql -U postgres -c "CREATE USER votacion_user WITH PASSWORD 'votacion_pass_change_me';"
-psql -U postgres -c "CREATE DATABASE votacion_db OWNER votacion_user;"
-
-# Aplicar migraciones y seed
-cd backend
-npx prisma migrate dev --name init
-npx prisma db seed
-```
-
-### 4. Levantar backend y frontend
-
-Abrir **dos terminales**:
-
-```powershell
-# Terminal 1 — Backend (http://localhost:4000)
-cd backend
-npm run dev
-
-# Terminal 2 — Frontend (http://localhost:3000)
-cd frontend
-npm run dev
-```
-
-### 5. Verificar que todo funciona
-
-| URL | Resultado esperado |
-|-----|-------------------|
-| `http://localhost:3000` | Dashboard de estado del sistema |
-| `http://localhost:4000/api/health` | `{ "status": "ok", "database": { "status": "connected" } }` |
-| `http://localhost:4000/api/health/db` | `{ "status": "ok", "healthCheckRecords": 1 }` |
-
----
-
-## Despliegue en producción (Docker)
-
-```powershell
-# Desde la raíz del proyecto
+```bash
 docker compose --env-file .env up --build -d
-
-# Primera vez: aplicar migraciones
-docker exec votacion_backend npx prisma migrate deploy
 ```
 
-Servicios expuestos:
-- Frontend (nginx): `http://tu-servidor:80`
-- Backend (Express): `http://tu-servidor:4000`
-- PostgreSQL: `localhost:5432` (interno)
+### 3. Direcciones de Acceso
+Una vez levantado, los usuarios accederán mediante:
+- **Dominio**: `http://app.med.umss.edu.bo:8080`
+- **IP Local**: `http://10.80.16.15:8080`
+
+*(El sitio web principal en `http://app.med.umss.edu.bo/` continuará funcionando normalmente sin ninguna interrupción).*
 
 ---
 
-## Estructura del proyecto
+## 🧹 Cómo Eliminar el Sistema después de las 3 Semanas
 
-```text
-ProyectoVotacion/
-├── docker-compose.yml       # Solo producción
-├── .env                     # Variables de entorno (producción)
-├── .env.example             # Plantilla
-├── .gitignore
-├── README.md
-│
-├── backend/
-│   ├── .env                 # Variables locales de desarrollo
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── prisma/
-│   │   ├── schema.prisma
-│   │   └── seed.ts
-│   └── src/
-│       ├── index.ts         # Bootstrap + graceful shutdown
-│       ├── app.ts           # Express + middlewares de seguridad
-│       ├── lib/prisma.ts    # Singleton Prisma
-│       └── routes/
-│           └── health.ts    # GET /api/health, GET /api/health/db
-│
-└── frontend/
-    ├── .env                 # Variables Vite (dev/prod)
-    ├── Dockerfile           # Solo producción (nginx)
-    ├── index.html
-    ├── vite.config.ts       # Proxy /api → backend en dev
-    ├── tailwind.config.js
-    ├── postcss.config.js
-    ├── tsconfig.json
-    └── src/
-        ├── main.tsx
-        ├── App.tsx
-        ├── index.css
-        ├── vite-env.d.ts
-        └── pages/
-            └── HealthDashboard.tsx
+Cuando concluyan las 3 semanas de votación y quieras retirar el sistema completamente del servidor sin dejar ningún residuo ni afectar a otros servicios:
+
+```bash
+# 1. Detener y eliminar contenedores, redes y datos del sistema de votación:
+docker compose down -v
+
+# 2. Borrar la carpeta del proyecto (opcional):
+rm -rf ProyectoVotacion
 ```
 
-## Notas de desarrollo
+---
 
-- **Proxy automático**: Vite proxea `/api/*` → `http://localhost:4000/api/*` en desarrollo. No necesitas configurar CORS en local.
-- **Hot-reload**: Tanto Vite (frontend) como `tsx watch` (backend) recargan automáticamente al guardar cambios.
-- **Singleton Prisma**: Evita múltiples conexiones a la BD en hot-reload.
-- **TypeScript strict**: 0 errores ni `any` implícito en ambos proyectos.
+## 🔑 Credenciales de Acceso por Defecto (Seed)
 
-### Configuración de Seguridad (Rate Limit)
+| Rol | Usuario | Contraseña | Descripción |
+|-----|---------|------------|-------------|
+| **SUPERADMIN** | `admin` | `admin123` | Control total del sistema y usuarios |
+| **ADMIN** | `admin2` | `admin123` | Creación de sesiones y puntos a votar |
+| **PRESIDENT** | `presidente1` | `presi123` | Moderador de sesión *(Sin emisión de voto)* |
+| **AUDITOR** | `auditor1` | `audit123` | Consulta de auditoría y actas SHA-256 |
+| **PARTICIPANT** | `voto1` | `voto123` | Congresista / Votante habilitado |
+| **PARTICIPANT** | `voto2` | `voto123` | Congresista / Votante habilitado |
 
-Por defecto, el límite estricto de intentos de inicio de sesión ha sido **desactivado** (permitiendo 1000 intentos) en `backend/src/app.ts` para facilitar pruebas en todos los entornos, incluyendo producción. 
-Si deseas activar la protección contra fuerza bruta para el despliegue final, el administrador puede habilitarlo modificando el archivo `backend/src/app.ts`:
+---
 
-1. Abre `backend/src/app.ts`
-2. Busca la configuración de `loginLimiter`.
-3. Cambia el valor de `max` (ej. a `10` para permitir solo 10 intentos cada 15 minutos):
+## ⚙️ Variables de Entorno (`.env`)
 
-```typescript
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10, // <- Cambiar de 1000 a 10
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=ProyVotacion2026_SecurePass!
+POSTGRES_DB=votacion_db
+DATABASE_URL="postgresql://postgres:ProyVotacion2026_SecurePass!@db:5432/votacion_db?schema=public"
+
+FRONTEND_PORT=8080
+BACKEND_PORT=4000
+FRONTEND_URL=http://app.med.umss.edu.bo:8080
+NODE_ENV=production
+
+JWT_SECRET=prod_a8f9c2d1e3b5467089123456789abcdef0123456789abcdef0123456789abcdef
+JWT_EXPIRES_IN=8h
+VITE_API_URL=/api
 ```
-4. Reinicia el servidor backend para aplicar los cambios.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Aplicar las migraciones a la base de datos local y regenerar el cliente: En la carpeta backend, ejecuta:
-
-npx prisma migrate dev
-
-o si la base de datos ya tiene estructura y solo quieres aplicar los archivos de migración pendientes sin prompt interactivo:
-
-npx prisma migrate deploy
-npx prisma generate
-
-
-
-
-
-
