@@ -67,8 +67,9 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       return;
     }
 
-    // 6. Verificar si ya existe una sesión activa registrada en la base de datos
-    if (user.activeSessionId) {
+    // 6. Verificar si ya existe una sesión activa registrada en la BD (solo para PARTICIPANTES)
+    const isManagerRole = ['SUPERADMIN', 'ADMIN', 'PRESIDENT', 'AUDITOR'].includes(user.role);
+    if (user.activeSessionId && !isManagerRole) {
       res.status(409).json({
         error:
           'Ya tienes una sesión activa en otro dispositivo. Por favor, cierra sesión en el anterior dispositivo o contacta a un administrador para liberar tu sesión.',
